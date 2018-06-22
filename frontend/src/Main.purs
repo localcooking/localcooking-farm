@@ -129,18 +129,18 @@ main = do
       , Button.withStyles
         (\_ ->
           { root: createStyles
-            { background: "#1b5e20"
+            { background: "#1565c0"
             , color: "#fff"
             , textTransform: "none"
             , "&:hover":
-              { background: "#4c8c4a"
+              { background: "#5e92f3"
               }
             }
           }
         )
         \{classes} ->
           button
-          { href: "https://farm.localcooking.com/"
+          { href: "https://chef.localcooking.com/"
           , classes: Button.createClasses classes
           , variant: Button.raised
           }
@@ -150,7 +150,7 @@ main = do
             }
             [ mainBrand
             ]
-          , R.text " Farms"
+          , R.text " Chefs"
           ]
       , R.text " "
       , Button.withStyles

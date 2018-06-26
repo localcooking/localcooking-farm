@@ -11,13 +11,15 @@ import Spec.Snackbar (messages)
 import LocalCooking.Types.ServerToClient (env)
 import LocalCooking.Main (defaultMain)
 import LocalCooking.Spec.Misc.Branding (mainBrand)
-import LocalCooking.Dependencies.Chef (chefDependencies, newChefQueues)
+import LocalCooking.Dependencies.Farm (farmDependencies, newFarmQueues)
+import LocalCooking.Dependencies.Tag (tagDependencies, newTagQueues)
 import LocalCooking.Global.Links.Internal (ImageLinks (Logo40Png))
 
 import Prelude
 import Data.Maybe (Maybe (..))
 import Data.UUID (GENUUID)
 import Data.URI.Location (toLocation)
+import Data.Argonaut.JSONUnit (JSONUnit (..))
 import Control.Monad.Aff (sequential)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Now (NOW)
@@ -40,8 +42,9 @@ import WebSocket (WEBSOCKET)
 import Network.HTTP.Affjax (AJAX)
 import Browser.WebStorage (WEB_STORAGE)
 import Crypto.Scrypt (SCRYPT)
-import Queue.Types (readOnly)
+import Queue.Types (readOnly, writeOnly)
 import Queue.One as One
+import Sparrow.Client.Queue (mountSparrowClientQueuesSingleton)
 
 
 
@@ -66,17 +69,49 @@ type Effects =
 
 main :: Eff Effects Unit
 main = do
-  log "Starting Local Cooking Chefs frontend..."
+  log "Starting Local Cooking Farms frontend..."
 
-  chefQueues <- newChefQueues
+  farmQueues <- newFarmQueues
+  tagQueues <- newTagQueues
   siteErrorQueue <- One.newQueue
+
+  searchMealTagsDeltaInQueue <- writeOnly <$> One.newQueue
+  searchMealTagsInitInQueue <- writeOnly <$> One.newQueue
+
+  let searchMealTagsOnDeltaOut deltaOut = case deltaOut of
+        Nothing -> pure unit
+          -- One.putQueue globalErrorQueue (GlobalErrorSecurity SecuritySaveFailed)
+          -- FIXME subsidiary specific error queue
+        Just mealTags -> pure unit
+          -- apply result to queue that targets that ui component
+      searchMealTagsOnInitOut mInitOut = case mInitOut of
+        Nothing -> pure unit
+          -- FIXME apply to mitch error queue
+        Just JSONUnit -> pure unit
+
+  _ <- mountSparrowClientQueuesSingleton tagQueues.searchMealTagsQueues
+    searchMealTagsDeltaInQueue searchMealTagsInitInQueue searchMealTagsOnDeltaOut searchMealTagsOnInitOut
+  -- One.onQueue searchMealTagKillificator \_ -> killSearchMealTagSub -- hack applied
+
+  -- Top-level delta in issuer
+  let searchMealTagDeltaIn :: String -> Eff Effects Unit
+      searchMealTagDeltaIn = One.putQueue searchMealTagsDeltaInQueue
+
+      -- searchMealTagInitIn :: JSONUnit -> Eff Effects Unit
+      -- searchMealTagInitIn = One.putQueue searchMealTagsInitInQueue
+      -- FIXME invoke immediately?
+
+
+  One.putQueue searchMealTagsInitInQueue JSONUnit
 
 
   defaultMain
     { env
     , palette
-    , siteQueues: chefQueues
-    , deps: chefDependencies
+    , siteQueues: {farmQueues,tagQueues}
+    , deps: \{farmQueues,tagQueues} -> do
+        farmDependencies farmQueues
+        tagDependencies tagQueues
     , extraRedirect: \_ _ -> Nothing
     , leftDrawer:
       { buttons: drawersButtons
